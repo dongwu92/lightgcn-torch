@@ -14,10 +14,12 @@ print(">>SEED:", world.seed)
 # ==============================
 import register
 from register import dataset
+from cudaloader import CudaLoader
 
 Recmodel = register.MODELS[world.model_name](world.config, dataset)
 Recmodel = Recmodel.to(world.device)
 bpr = utils.BPRLoss(Recmodel, world.config)
+cuda_loader = CudaLoader(dataset, world.TRAIN_epochs)
 
 weight_file = utils.getFileName()
 print(f"load and save to {weight_file}")
@@ -43,10 +45,10 @@ try:
         print('======================')
         print(f'EPOCH[{epoch}/{world.TRAIN_epochs}]')
         start = time.time()
-        if epoch %10 == 0:
+        if epoch %10 == 0 and epoch > 100:
             cprint("[TEST]")
             Procedure.Test(dataset, Recmodel, epoch, w, world.config['multicore'])
-        output_information = Procedure.BPR_train_original(dataset, Recmodel, bpr, epoch, neg_k=Neg_k,w=w)
+        output_information = Procedure.BPR_train_original(cuda_loader, Recmodel, bpr, epoch, neg_k=Neg_k,w=w)
         
         print(f'[saved][{output_information}]')
         torch.save(Recmodel.state_dict(), weight_file)

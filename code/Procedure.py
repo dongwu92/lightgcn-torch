@@ -19,23 +19,14 @@ import multiprocessing
 from sklearn.metrics import roc_auc_score
 
 
-CORES = multiprocessing.cpu_count() // 2
+CORES = multiprocessing.cpu_count() - 2
 
 
-def BPR_train_original(dataset, recommend_model, loss_class, epoch, neg_k=1, w=None):
+def BPR_train_original(cuda_loader, recommend_model, loss_class, epoch, neg_k=1, w=None):
     Recmodel = recommend_model
     Recmodel.train()
     bpr: utils.BPRLoss = loss_class
-    allusers = list(range(dataset.n_users))
-    S, sam_time = utils.UniformSample_original(allusers, dataset)
-    print(f"BPR[sample time][{sam_time[0]:.1f}={sam_time[1]:.2f}+{sam_time[2]:.2f}]")
-    users = torch.Tensor(S[:, 0]).long()
-    posItems = torch.Tensor(S[:, 1]).long()
-    negItems = torch.Tensor(S[:, 2]).long()
-
-    users = users.to(world.device)
-    posItems = posItems.to(world.device)
-    negItems = negItems.to(world.device)
+    users, posItems, negItems = cuda_loader.get_train_data_at(epoch)
     users, posItems, negItems = utils.shuffle(users, posItems, negItems)
     total_batch = len(users) // world.config['bpr_batch_size'] + 1
     aver_loss = 0.
