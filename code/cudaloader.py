@@ -16,11 +16,11 @@ class CudaLoader:
         if not os.path.exists(self.test_temp):
             os.mkdir(self.test_temp)
         # load all data into cuda
+        self.epochs_data = {}
         if len(os.listdir(self.train_temp)) >= self.num_epochs:
             self._load_train_cuda()
     
     def _load_train_cuda(self):
-        self.epochs_data = {}
         for i in range(self.num_epochs):
             users, posItems, negItems = self._sample_train_data_at(i)
             self.epochs_data[i] = [users, posItems, negItems]
@@ -34,7 +34,7 @@ class CudaLoader:
             allusers = list(range(self.dataset.n_users))
             S, sam_time = utils.UniformSample_original(allusers, self.dataset)
             print(f"BPR[sample time][{sam_time[0]:.1f}={sam_time[1]:.2f}+{sam_time[2]:.2f}]")
-            np.save(S, epoch_path)
+            np.save(epoch_path, S)
         users = torch.Tensor(S[:, 0]).long()
         posItems = torch.Tensor(S[:, 1]).long()
         negItems = torch.Tensor(S[:, 2]).long()
