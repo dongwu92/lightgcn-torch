@@ -200,6 +200,8 @@ class LightGCN(BasicModel):
         neg_scores = torch.sum(neg_scores, dim=1)
         
         loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
+        bipartite_loss = torch.mean(torch.abs(userEmb0 - posEmb0)) + torch.mean(torch.abs(userEmb0 - negEmb0))
+        loss += 1e-4 * bipartite_loss
         
         return loss, reg_loss
        
