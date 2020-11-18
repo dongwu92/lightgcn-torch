@@ -15,17 +15,7 @@ class CudaLoader:
         self.test_temp = '../data/' + world.dataset + '/test_temp/'
         if not os.path.exists(self.test_temp):
             os.mkdir(self.test_temp)
-        # load all data into cuda
-        self.epochs_data = {}
-        if len(os.listdir(self.train_temp)) >= self.num_epochs:
-            self._load_train_cuda()
     
-    def _load_train_cuda(self):
-        for i in range(self.num_epochs):
-            users, posItems, negItems = self._sample_train_data_at(i)
-            self.epochs_data[i] = [users, posItems, negItems]
-        # TODO test
-
     def _sample_train_data_at(self, epoch):
         epoch_path = self.train_temp + 'S_epoch_' + str(epoch) + '.npy'
         if os.path.exists(epoch_path):
@@ -44,7 +34,4 @@ class CudaLoader:
         return users, posItems, negItems
     
     def get_train_data_at(self, epoch):
-        if epoch not in self.epochs_data:
-            users, posItems, negItems = self._sample_train_data_at(epoch)
-            self.epochs_data[epoch] = [users, posItems, negItems]
-        return self.epochs_data[epoch]
+        return self._sample_train_data_at(epoch)
