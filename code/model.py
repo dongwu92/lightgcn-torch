@@ -12,6 +12,7 @@ import torch
 from dataloader import BasicDataset
 from torch import nn
 import numpy as np
+import torch.nn.functional as F
 
 
 class BasicModel(nn.Module):    
@@ -200,6 +201,12 @@ class LightGCN(BasicModel):
         neg_scores = torch.sum(neg_scores, dim=1)
         
         loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
+        #bipartite_loss = torch.mean(torch.square(userEmb0 - posEmb0)) + torch.mean(torch.square(userEmb0 - negEmb0))
+        ue = F.softmax(userEmb0, dim=-1)
+        pve = F.softmax(posEmb0, dim=-1)
+        nve = F.softmax(negEmb0, dim=-1)
+        bipartite_loss = torch.mean(ue * torch.log(pve)) + torch.mean(ue * torch.log(nve)) + torch.mean(pve * torch.log(ue)) + torch.mean(nve * torch.log(ue))
+        loss += self.config['ceweight'] * bipartite_loss
         
         return loss, reg_loss
        
