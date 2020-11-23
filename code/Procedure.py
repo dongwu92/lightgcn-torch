@@ -14,7 +14,8 @@ import dataloader
 from pprint import pprint
 from time import time
 from tqdm import tqdm
-import model
+# import model
+import model_grand as model
 import multiprocessing
 from sklearn.metrics import roc_auc_score
 
