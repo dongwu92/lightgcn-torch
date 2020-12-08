@@ -335,9 +335,13 @@ class Loader(BasicDataset):
             try:
                 pre_adj_user = sp.load_npz(self.path + '/s_pre_adj_user.npz')
                 pre_adj_item = sp.load_npz(self.path + '/s_pre_adj_item.npz')
+                pre_adj_uu = sp.load_npz(self.path + '/s_pre_adj_uu.npz')
+                pre_adj_vv = sp.load_npz(self.path + '/s_pre_adj_vv.npz')
                 print("successfully loaded...")
                 norm_user = pre_adj_user
                 norm_item = pre_adj_item
+                norm_uu = pre_adj_uu
+                norm_vv = pre_adj_vv
             except :
                 print("generating adjacency matrix")
                 s = time()
@@ -352,7 +356,7 @@ class Loader(BasicDataset):
                 D_user[np.isinf(D_user)] = 0
                 Dmat_user = sp.diags(D_user)
                 print("generating 3")
-                
+
                 adj_item = R.todok()
                 print("generating 4")
                 rowsum_item = np.array(adj_item.sum(axis=0))
@@ -361,13 +365,25 @@ class Loader(BasicDataset):
                 Dmat_item = sp.diags(D_item)
                 print("generating 5")
 
-
                 norm_user = Dmat_item.dot(adj_user).dot(Dmat_user)
+                norm_item = Dmat_user.dot(adj_item).dot(Dmat_item)
+
+                Suu = norm_item.dot(norm_user)
+                Suu_valid = (Suu>0.003)
+                suux, suuy = Suu_valid.nonzero()
+                suu_data = np.array(Suu[Suu_valid])[0]
+                norm_uu = csr_matrix((suu_data, (suux, suuy)), shape=(R.shape[0], R.shape[0]))
+                sp.save_npz(self.path + '/s_pre_adj_uu.npz', norm_uu)
+
+                Svv = norm_user.dot(norm_item)
+                Svv_valid = (Svv>0.003)
+                svvx, svvy = Svv_valid.nonzero()    
+                svv_data = np.array(Svv[Svv_valid])[0]
+                norm_vv = csr_matrix((svv_data, (svvx, svvy)), shape=(R.shape[1], R.shape[1]))
+                sp.save_npz(self.path + '/s_pre_adj_vv.npz', norm_vv)
+
                 norm_user = norm_user.tocsr()
                 sp.save_npz(self.path + '/s_pre_adj_user.npz', norm_user)
-                print("generating 6")
-
-                norm_item = Dmat_user.dot(adj_item).dot(Dmat_item)
                 norm_item = norm_item.tocsr()
                 sp.save_npz(self.path + '/s_pre_adj_item.npz', norm_item)
                 print("generating 7")
@@ -397,14 +413,20 @@ class Loader(BasicDataset):
             if self.split == True:
                 self.Graph_user = self._split_A_hat(norm_user)
                 self.Graph_item = self._split_A_hat(norm_item)
+                self.Graph_uu = self._split_A_hat(norm_uu)
+                self.Graph_vv = self._split_A_hat(norm_vv)
                 print("done split matrix")
             else:
                 self.Graph_user = self._convert_sp_mat_to_sp_tensor(norm_user)
                 self.Graph_item = self._convert_sp_mat_to_sp_tensor(norm_item)
+                self.Graph_uu = self._convert_sp_mat_to_sp_tensor(norm_uu)
+                self.Graph_vv = self._convert_sp_mat_to_sp_tensor(norm_vv)
                 self.Graph_user = self.Graph_user.coalesce().to(world.device)
                 self.Graph_item = self.Graph_item.coalesce().to(world.device)
+                self.Graph_uu = self.Graph_uu.coalesce().to(world.device)
+                self.Graph_vv = self.Graph_vv.coalesce().to(world.device)
                 print("don't split the matrix")
-        return self.Graph_user, self.Graph_item
+        return self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
 
     def __build_test(self):
         """
