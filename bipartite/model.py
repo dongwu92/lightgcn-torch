@@ -114,7 +114,7 @@ class LightGCN(BasicModel):
             self.embedding_item.weight.data.copy_(torch.from_numpy(self.config['item_emb']))
             print('use pretarined data')
         self.f = nn.Sigmoid()
-        self.Graph = self.dataset.getSparseGraph()
+        self.Graph_user, self.Graph_item = self.dataset.getSparseGraph()
         print(f"lgn is already to go(dropout:{self.config['dropout']})")
 
         # print("save_txt")
@@ -131,12 +131,14 @@ class LightGCN(BasicModel):
     
     def __dropout(self, keep_prob):
         if self.A_split:
-            graph = []
-            for g in self.Graph:
-                graph.append(self.__dropout_x(g, keep_prob))
+            graph_user, graph_item = [], []
+            for g in self.Graph_user:
+                graph_user.append(self.__dropout_x(g, keep_prob))
+            for g in self.Graph_item:
+                graph_item.append(self.__dropout_x(g, keep_prob))
         else:
             graph = self.__dropout_x(self.Graph, keep_prob)
-        return graph
+        return graph_user, graph_item
     
     def computer(self):
         """
@@ -144,32 +146,37 @@ class LightGCN(BasicModel):
         """       
         users_emb = self.embedding_user.weight
         items_emb = self.embedding_item.weight
-        all_emb = torch.cat([users_emb, items_emb])
+        # all_emb = torch.cat([users_emb, items_emb])
         #   torch.split(all_emb , [self.num_users, self.num_items])
-        embs = [all_emb]
+        embs_user, embs_item = [users_emb], [items_emb]
         if self.config['dropout']:
             if self.training:
                 print("droping")
-                g_droped = self.__dropout(self.keep_prob)
+                g_droped_user, g_droped_item = self.__dropout(self.keep_prob)
             else:
-                g_droped = self.Graph        
+                g_droped_user, g_droped_item = self.Graph_user, self.Graph_item        
         else:
-            g_droped = self.Graph    
+            g_droped_user, g_droped_item = self.Graph_user, self.Graph_item    
         
         for layer in range(self.n_layers):
             if self.A_split:
-                temp_emb = []
-                for f in range(len(g_droped)):
-                    temp_emb.append(torch.sparse.mm(g_droped[f], all_emb))
-                side_emb = torch.cat(temp_emb, dim=0)
-                all_emb = side_emb
+                temp_emb_user, temp_emb_item = [], []
+                for f in range(len(g_droped_user)):
+                    temp_emb_user.append(torch.sparse.mm(g_droped_user[f], users_emb))
+                users_emb = torch.cat(temp_emb_user, dim=0)
+                for f in range(len(g_droped_item)):
+                    temp_emb_item.append(torch.sparse.mm(g_droped_item[f], items_emb))
+                items_emb = torch.cat(temp_emb_item, dim=0)
             else:
-                all_emb = torch.sparse.mm(g_droped, all_emb)
-            embs.append(all_emb)
-        embs = torch.stack(embs, dim=1)
+                items_emb = torch.sparse.mm(g_droped_user, users_emb)
+                users_emb = torch.sparse.mm(g_droped_item, items_emb)
+            embs_user.append(users_emb)
+            embs_item.append(items_emb)
+        users = torch.mean(torch.stack(embs_user, dim=1), dim=1)
+        items = torch.mean(torch.stack(embs_item, dim=1), dim=1)
         #print(embs.size())
-        light_out = torch.mean(embs, dim=1)
-        users, items = torch.split(light_out, [self.num_users, self.num_items])
+        # light_out = torch.mean(embs, dim=1)
+        # users, items = torch.split(light_out, [self.num_users, self.num_items])
         return users, items
     
     def getUsersRating(self, users):
@@ -201,10 +208,17 @@ class LightGCN(BasicModel):
         neg_scores = torch.sum(neg_scores, dim=1)
         
         loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
+        diff_user = torch.sparse.mm(self.Graph_item, torch.sparse.mm(self.Graph_user, userEmb0))[users.long()] - userEmb0
+        diff_pos = torch.sparse.mm(self.Graph_user, torch.sparse.mm(self.Graph_item, posEmb0))[pos.long()] - posEmb0
+        diff_neg = torch.sparse.mm(self.Graph_user, torch.sparse.mm(self.Graph_item, negEmb0))[neg.long()] - negEmb0
+        prop_loss = torch.mean(torch.abs(diff_user), dim=-1) \
+                + torch.mean(torch.abs(diff_pos), dim=-1) \
+                + torch.mean(torch.abs(diff_neg), dim=-1)
+        loss += 1e-2 * prop_loss
         #bipartite_loss = torch.mean(torch.square(userEmb0 - posEmb0)) + torch.mean(torch.square(userEmb0 - negEmb0))
-        ue = F.softmax(userEmb0, dim=-1)
-        pve = F.softmax(posEmb0, dim=-1)
-        nve = F.softmax(negEmb0, dim=-1)
+        # ue = F.softmax(userEmb0, dim=-1)
+        # pve = F.softmax(posEmb0, dim=-1)
+        # nve = F.softmax(negEmb0, dim=-1)
         # bipartite_loss = torch.mean(ue * torch.log(pve)) + torch.mean(ue * torch.log(nve)) + torch.mean(pve * torch.log(ue)) + torch.mean(nve * torch.log(ue))
         # loss += self.config['ceweight'] * bipartite_loss
         
