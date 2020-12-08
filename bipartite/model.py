@@ -137,7 +137,8 @@ class LightGCN(BasicModel):
             for g in self.Graph_item:
                 graph_item.append(self.__dropout_x(g, keep_prob))
         else:
-            graph = self.__dropout_x(self.Graph, keep_prob)
+            graph_user = self.__dropout_x(self.Graph_user, keep_prob)
+            graph_item = self.__dropout_x(self.Graph_item, keep_prob)
         return graph_user, graph_item
     
     def computer(self):
@@ -208,13 +209,6 @@ class LightGCN(BasicModel):
         neg_scores = torch.sum(neg_scores, dim=1)
         
         loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
-        diff_user = torch.sparse.mm(self.Graph_item, torch.sparse.mm(self.Graph_user, userEmb0))[users.long()] - userEmb0
-        diff_pos = torch.sparse.mm(self.Graph_user, torch.sparse.mm(self.Graph_item, posEmb0))[pos.long()] - posEmb0
-        diff_neg = torch.sparse.mm(self.Graph_user, torch.sparse.mm(self.Graph_item, negEmb0))[neg.long()] - negEmb0
-        prop_loss = torch.mean(torch.abs(diff_user), dim=-1) \
-                + torch.mean(torch.abs(diff_pos), dim=-1) \
-                + torch.mean(torch.abs(diff_neg), dim=-1)
-        loss += 1e-2 * prop_loss
         #bipartite_loss = torch.mean(torch.square(userEmb0 - posEmb0)) + torch.mean(torch.square(userEmb0 - negEmb0))
         # ue = F.softmax(userEmb0, dim=-1)
         # pve = F.softmax(posEmb0, dim=-1)
