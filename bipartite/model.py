@@ -167,7 +167,7 @@ class LightGCN(BasicModel):
             g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
         
         for layer in range(self.n_layers):
-            if self.A_split:
+            '''if self.A_split:
                 temp_emb_user, temp_emb_item = [], []
                 for f in range(len(g_droped_user)):
                     temp_emb_user.append(torch.sparse.mm(g_droped_user[f], users_emb))
@@ -177,7 +177,17 @@ class LightGCN(BasicModel):
                 items_emb = torch.cat(temp_emb_item, dim=0)
             else:
                 items_emb = torch.sparse.mm(g_droped_user, users_emb) + torch.sparse.mm(g_droped_vv, items_emb)
-                users_emb = torch.sparse.mm(g_droped_item, items_emb) + torch.sparse.mm(g_droped_uu, users_emb)
+                users_emb = torch.sparse.mm(g_droped_item, items_emb) + torch.sparse.mm(g_droped_uu, users_emb)'''
+            uv_emb = torch.sparse.mm(g_droped_item, items_emb)
+            uu_emb = torch.sparse.mm(g_droped_uu, users_emb)
+            users_emb = uu_emb + uv_emb
+            vu_emb = torch.sparse.mm(g_droped_user, users_emb)
+            vv_emb = torch.sparse.mm(g_droped_vv, items_emb)
+            items_emb = vv_emb + vu_emb
+            #embs_user.append(uu_emb)
+            #embs_user.append(uv_emb)
+            #embs_item.append(vv_emb)
+            #embs_item.append(vu_emb)
             embs_user.append(users_emb)
             embs_item.append(items_emb)
         users = torch.mean(torch.stack(embs_user, dim=1), dim=1)

@@ -227,6 +227,7 @@ class Loader(BasicDataset):
         self.split = config['A_split']
         self.folds = config['A_n_fold']
         self.twohop = config['twohop']
+        self.num_layers = config['lightGCN_n_layers']
         self.mode_dict = {'train': 0, "test": 1}
         self.mode = self.mode_dict['train']
         self.n_user = 0
@@ -329,105 +330,100 @@ class Loader(BasicDataset):
         index = torch.stack([row, col])
         data = torch.FloatTensor(coo.data)
         return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
+
+    def sparsify_propagation(self, adj, hop_thres):
+        adj_valid = (adj > hop_thres)
+        adjx, adjy = adj_valid.nonzero()
+        adj_data = np.array(adj[adj_valid])[0]
+        norm_adj = csr_matrix((adj_data, (adjx, adjy)), shape=(adj.shape[0], adj.shape[1]))
+        return norm_adj
+
+    def generate_sparse_normadj(self, layer, hop_threshold, previous, origins):
+        # previous: [uu_k-1, uv_k-1, vv_k-1, vu_k-1]; origins: [Suu, Suv, Svv, Svu]
+        uu_path = self.path + '/s_pre_adj_uu_' + str(self.twohop) + '_' + str(layer) + '.npz'
+        uv_path = self.path + '/s_pre_adj_uv_' + str(self.twohop) + '_' + str(layer) + '.npz'
+        vv_path = self.path + '/s_pre_adj_vv_' + str(self.twohop) + '_' + str(layer) + '.npz'
+        vu_path = self.path + '/s_pre_adj_vu_' + str(self.twohop) + '_' + str(layer) + '.npz'
+        try:
+            # Svu = norm_user (V X U), Suv = norm_item (U X V)
+            norm_uu = sp.load_npz(uu_path) # Suu        (U X U)
+            norm_uv = sp.load_npz(uv_path) # Suv        (U X V)
+            norm_vv = sp.load_npz(vv_path) # Svv        (V X V)
+            norm_vu = sp.load_npz(vu_path) # Svu        (V X U)
+        except:
+            print('generate normadj at layer#', layer)
+            # Su = norm_user, Sv = norm_item
+            if layer == 0:
+                # save (Sv, Sv * Su) for users and (Su, Su * Sv) for items
+                norm_uu = origins[1].dot(origins[3])
+                norm_uu = self.sparsify_propagation(norm_uu, hop_threshold)
+                norm_vv = origins[3].dot(origins[1])
+                norm_vv = self.sparsify_propagation(norm_vv, hop_threshold)
+                norm_uv = origins[1]
+                norm_vu = origins[3]
+                print('#Layer 0:::', hop_threshold, len(norm_uu.nonzero()[0]), len(norm_vu.nonzero()[0]), len(norm_vv.nonzero()[0]), len(norm_uv.nonzero()[0]))
+            else:
+                # norm_uu = org_uu * prv_uu + org_uv * prv_vu
+                norm_uu = origins[0].dot(previous[0]) + origins[1].dot(previous[3])
+                norm_uu = self.sparsify_propagation(norm_uu, hop_threshold)
+                # norm_uv = org_uu * prv_uv + org_uv * prv_vv
+                norm_uv = origins[0].dot(previous[1]) + origins[1].dot(previous[2])
+                norm_uv = self.sparsify_propagation(norm_uv, hop_threshold)
+                # norm_vv = org_vv * prv_vv + org_vu * prv_uv
+                norm_vv = origins[2].dot(previous[2]) + origins[3].dot(previous[1])
+                norm_vv = self.sparsify_propagation(norm_vv, hop_threshold)
+                # norm_vu = org_vv * prv_vu + org_vu * prv_uu
+                norm_vu = origins[2].dot(previous[3]) + origins[3].dot(previous[0])
+                norm_vu = self.sparsify_propagation(norm_vu, hop_threshold)
+                print('#Layer', layer, ':::', hop_threshold, len(norm_uu.nonzero()[0]), len(norm_vu.nonzero()[0]), len(norm_vv.nonzero()[0]), len(norm_uv.nonzero()[0]))
+            sp.save_npz(uu_path, norm_uu)
+            sp.save_npz(uv_path, norm_uv)
+            sp.save_npz(vv_path, norm_vv)
+            sp.save_npz(vu_path, norm_vu)
+        return norm_uu, norm_uv, norm_vv, norm_vu
+
+    def convert_spmat_to_Graph(self, mats):
+        tmp_Graphs = []
+        for mat in mats:
+            tmp_Graph = self._convert_sp_mat_to_sp_tensor(mat)
+            tmp_Graphs.append(tmp_Graph.coalesce().to(world.device))
+        return tmp_Graphs
         
     def getSparseGraph(self):
         print("loading adjacency matrix")
-        if self.Graph_user is None:
-            try:
-                pre_adj_user = sp.load_npz(self.path + '/s_pre_adj_user_' + str(self.twohop) + '.npz')
-                pre_adj_item = sp.load_npz(self.path + '/s_pre_adj_item_' + str(self.twohop) + '.npz')
-                pre_adj_uu = sp.load_npz(self.path + '/s_pre_adj_uu_' + str(self.twohop) + '.npz')
-                pre_adj_vv = sp.load_npz(self.path + '/s_pre_adj_vv_' + str(self.twohop) + '.npz')
-                print("successfully loaded...")
-                norm_user = pre_adj_user
-                norm_item = pre_adj_item
-                norm_uu = pre_adj_uu
-                norm_vv = pre_adj_vv
-            except :
-                print("generating adjacency matrix")
-                s = time()
+        s = time()
+        print("generating 1")
+        R = self.UserItemNet.tolil()
 
-                print("generating 1")
-                R = self.UserItemNet.tolil()
+        adj_user = R.T.todok()
+        rowsum_user = np.array(adj_user.sum(axis=0))
+        D_user = np.power(rowsum_user, -0.5).flatten()
+        D_user[np.isinf(D_user)] = 0
+        Dmat_user = sp.diags(D_user)
 
-                adj_user = R.T.todok()
-                print("generating 2")
-                rowsum_user = np.array(adj_user.sum(axis=0))
-                D_user = np.power(rowsum_user, -0.5).flatten()
-                D_user[np.isinf(D_user)] = 0
-                Dmat_user = sp.diags(D_user)
-                print("generating 3")
+        adj_item = R.todok()
+        rowsum_item = np.array(adj_item.sum(axis=0))
+        D_item = np.power(rowsum_item, -0.5).flatten()
+        D_item[np.isinf(D_item)] = 0
+        Dmat_item = sp.diags(D_item)
 
-                adj_item = R.todok()
-                print("generating 4")
-                rowsum_item = np.array(adj_item.sum(axis=0))
-                D_item = np.power(rowsum_item, -0.5).flatten()
-                D_item[np.isinf(D_item)] = 0
-                Dmat_item = sp.diags(D_item)
-                print("generating 5")
+        norm_user = Dmat_item.dot(adj_user).dot(Dmat_user)
+        norm_item = Dmat_user.dot(adj_item).dot(Dmat_item)
+        print("generating 2")
 
-                norm_user = Dmat_item.dot(adj_user).dot(Dmat_user)
-                norm_item = Dmat_user.dot(adj_item).dot(Dmat_item)
+        origins = self.generate_sparse_normadj(0, self.twohop, [], [None, norm_item, None, norm_user])
+        previous = origins
+        self.Graphs = [self.convert_spmat_to_Graph(previous)]
+        print("generating 3")
+        for layer in range(1, self.num_layers):
+            # thres = self.twohop / (4 * layer)
+            previous = self.generate_sparse_normadj(layer, self.twohop / layer, previous, origins)
+            self.Graphs.append(self.convert_spmat_to_Graph(previous))
 
-                Suu = norm_item.dot(norm_user)
-                Suu_valid = (Suu>0.003)
-                suux, suuy = Suu_valid.nonzero()
-                suu_data = np.array(Suu[Suu_valid])[0]
-                norm_uu = csr_matrix((suu_data, (suux, suuy)), shape=(R.shape[0], R.shape[0]))
-                sp.save_npz(self.path + '/s_pre_adj_uu_' + str(self.twohop) + '.npz', norm_uu)
-
-                Svv = norm_user.dot(norm_item)
-                Svv_valid = (Svv>0.003)
-                svvx, svvy = Svv_valid.nonzero()    
-                svv_data = np.array(Svv[Svv_valid])[0]
-                norm_vv = csr_matrix((svv_data, (svvx, svvy)), shape=(R.shape[1], R.shape[1]))
-                sp.save_npz(self.path + '/s_pre_adj_vv_' + str(self.twohop) + '.npz', norm_vv)
-
-                norm_user = norm_user.tocsr()
-                sp.save_npz(self.path + '/s_pre_adj_user_' + str(self.twohop) + '.npz', norm_user)
-                norm_item = norm_item.tocsr()
-                sp.save_npz(self.path + '/s_pre_adj_item_' + str(self.twohop) + '.npz', norm_item)
-                print("generating 7")
-
-                '''
-                adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32)
-                adj_mat = adj_mat.tolil()
-                R = self.UserItemNet.tolil()
-                adj_mat[:self.n_users, self.n_users:] = R
-                adj_mat[self.n_users:, :self.n_users] = R.T
-                adj_mat = adj_mat.todok()
-                # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
-                
-                rowsum = np.array(adj_mat.sum(axis=1))
-                d_inv = np.power(rowsum, -0.5).flatten()
-                d_inv[np.isinf(d_inv)] = 0.
-                d_mat = sp.diags(d_inv)
-                
-                norm_adj = d_mat.dot(adj_mat)
-                norm_adj = norm_adj.dot(d_mat)
-                norm_adj = norm_adj.tocsr()
-                '''
-
-                end = time()
-                print(f"costing {end-s}s, saved norm_mat...")
-
-            if self.split == True:
-                self.Graph_user = self._split_A_hat(norm_user)
-                self.Graph_item = self._split_A_hat(norm_item)
-                self.Graph_uu = self._split_A_hat(norm_uu)
-                self.Graph_vv = self._split_A_hat(norm_vv)
-                print("done split matrix")
-            else:
-                self.Graph_user = self._convert_sp_mat_to_sp_tensor(norm_user)
-                self.Graph_item = self._convert_sp_mat_to_sp_tensor(norm_item)
-                self.Graph_uu = self._convert_sp_mat_to_sp_tensor(norm_uu)
-                self.Graph_vv = self._convert_sp_mat_to_sp_tensor(norm_vv)
-                self.Graph_user = self.Graph_user.coalesce().to(world.device)
-                self.Graph_item = self.Graph_item.coalesce().to(world.device)
-                self.Graph_uu = self.Graph_uu.coalesce().to(world.device)
-                self.Graph_vv = self.Graph_vv.coalesce().to(world.device)
-                print("don't split the matrix")
-        return self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
+        print("generating 4")
+        end = time()
+        print(f"costing {end-s}s, saved norm_mat...")
+        return self.Graphs
 
     def __build_test(self):
         """

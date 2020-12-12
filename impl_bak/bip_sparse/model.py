@@ -115,38 +115,38 @@ class LightGCN(BasicModel):
             self.embedding_item.weight.data.copy_(torch.from_numpy(self.config['item_emb']))
             print('use pretarined data')
         self.f = nn.Sigmoid()
-        self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv = self.dataset.getSparseGraph()
+        self.Graphs = self.dataset.getSparseGraph()
         print(f"lgn is already to go(dropout:{self.config['dropout']})")
 
         # print("save_txt")
-    def __dropout_x(self, x, keep_prob):
-        size = x.size()
-        index = x.indices().t()
-        values = x.values()
-        random_index = torch.rand(len(values)) + keep_prob
-        random_index = random_index.int().bool()
-        index = index[random_index]
-        values = values[random_index]/keep_prob
-        g = torch.sparse.FloatTensor(index.t(), values, size)
-        return g
+    # def __dropout_x(self, x, keep_prob):
+    #     size = x.size()
+    #     index = x.indices().t()
+    #     values = x.values()
+    #     random_index = torch.rand(len(values)) + keep_prob
+    #     random_index = random_index.int().bool()
+    #     index = index[random_index]
+    #     values = values[random_index]/keep_prob
+    #     g = torch.sparse.FloatTensor(index.t(), values, size)
+    #     return g
     
-    def __dropout(self, keep_prob):
-        if self.A_split:
-            graph_user, graph_item, graph_uu, graph_vv = [], [], [], []
-            for g in self.Graph_user:
-                graph_user.append(self.__dropout_x(g, keep_prob))
-            for g in self.Graph_item:
-                graph_item.append(self.__dropout_x(g, keep_prob))
-            for g in self.Graph_uu:
-                graph_uu.append(self.__dropout_x(g, keep_prob))
-            for g in self.Graph_vv:
-                graph_vv.append(self.__dropout_x(g, keep_prob))
-        else:
-            graph_user = self.__dropout_x(self.Graph_user, keep_prob)
-            graph_item = self.__dropout_x(self.Graph_item, keep_prob)
-            graph_uu = self.__dropout_x(self.Graph_uu, keep_prob)
-            graph_vv = self.__dropout_x(self.Graph_vv, keep_prob)
-        return graph_user, graph_item, graph_uu, graph_vv
+    # def __dropout(self, keep_prob):
+    #     if self.A_split:
+    #         graph_user, graph_item, graph_uu, graph_vv = [], [], [], []
+    #         for g in self.Graph_user:
+    #             graph_user.append(self.__dropout_x(g, keep_prob))
+    #         for g in self.Graph_item:
+    #             graph_item.append(self.__dropout_x(g, keep_prob))
+    #         for g in self.Graph_uu:
+    #             graph_uu.append(self.__dropout_x(g, keep_prob))
+    #         for g in self.Graph_vv:
+    #             graph_vv.append(self.__dropout_x(g, keep_prob))
+    #     else:
+    #         graph_user = self.__dropout_x(self.Graph_user, keep_prob)
+    #         graph_item = self.__dropout_x(self.Graph_item, keep_prob)
+    #         graph_uu = self.__dropout_x(self.Graph_uu, keep_prob)
+    #         graph_vv = self.__dropout_x(self.Graph_vv, keep_prob)
+    #     return graph_user, graph_item, graph_uu, graph_vv
     
     def computer(self):
         """
@@ -157,29 +157,30 @@ class LightGCN(BasicModel):
         # all_emb = torch.cat([users_emb, items_emb])
         #   torch.split(all_emb , [self.num_users, self.num_items])
         embs_user, embs_item = [users_emb], [items_emb]
-        if self.config['dropout']:
-            if self.training:
-                print("droping")
-                g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.__dropout(self.keep_prob)
-            else:
-                g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
-        else:
-            g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
+        # if self.config['dropout']:
+        #     if self.training:
+        #         print("droping")
+        #         g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.__dropout(self.keep_prob)
+        #     else:
+        #         g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
+        # else:
+        # g_droped_user, g_droped_item, g_droped_uu, g_droped_vv = self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv
         
         for layer in range(self.n_layers):
-            if self.A_split:
-                temp_emb_user, temp_emb_item = [], []
-                for f in range(len(g_droped_user)):
-                    temp_emb_user.append(torch.sparse.mm(g_droped_user[f], users_emb))
-                users_emb = torch.cat(temp_emb_user, dim=0)
-                for f in range(len(g_droped_item)):
-                    temp_emb_item.append(torch.sparse.mm(g_droped_item[f], items_emb))
-                items_emb = torch.cat(temp_emb_item, dim=0)
-            else:
-                items_emb = torch.sparse.mm(g_droped_user, users_emb) + torch.sparse.mm(g_droped_vv, items_emb)
-                users_emb = torch.sparse.mm(g_droped_item, items_emb) + torch.sparse.mm(g_droped_uu, users_emb)
-            embs_user.append(users_emb)
-            embs_item.append(items_emb)
+            g_droped_uu, g_droped_uv, g_droped_vv, g_droped_vu = self.Graphs[layer]
+            # if self.A_split:
+            #     temp_emb_user, temp_emb_item = [], []
+            #     for f in range(len(g_droped_user)):
+            #         temp_emb_user.append(torch.sparse.mm(g_droped_user[f], users_emb))
+            #     users_emb = torch.cat(temp_emb_user, dim=0)
+            #     for f in range(len(g_droped_item)):
+            #         temp_emb_item.append(torch.sparse.mm(g_droped_item[f], items_emb))
+            #     items_emb = torch.cat(temp_emb_item, dim=0)
+            # else:
+            users_tmp = (torch.sparse.mm(g_droped_uv, items_emb) + torch.sparse.mm(g_droped_uu, users_emb)) / 2
+            items_tmp = (torch.sparse.mm(g_droped_vu, users_emb) + torch.sparse.mm(g_droped_vv, items_emb)) / 2
+            embs_user.append(users_tmp)
+            embs_item.append(items_tmp)
         users = torch.mean(torch.stack(embs_user, dim=1), dim=1)
         items = torch.mean(torch.stack(embs_item, dim=1), dim=1)
         #print(embs.size())

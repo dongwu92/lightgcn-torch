@@ -370,17 +370,19 @@ class Loader(BasicDataset):
                 norm_item = Dmat_user.dot(adj_item).dot(Dmat_item)
 
                 Suu = norm_item.dot(norm_user)
-                Suu_valid = (Suu>0.003)
+                Suu_valid = (Suu>self.twohop)
                 suux, suuy = Suu_valid.nonzero()
                 suu_data = np.array(Suu[Suu_valid])[0]
                 norm_uu = csr_matrix((suu_data, (suux, suuy)), shape=(R.shape[0], R.shape[0]))
+                #norm_uu = norm_item.dot(norm_user)
                 sp.save_npz(self.path + '/s_pre_adj_uu_' + str(self.twohop) + '.npz', norm_uu)
 
                 Svv = norm_user.dot(norm_item)
-                Svv_valid = (Svv>0.003)
+                Svv_valid = (Svv>self.twohop)
                 svvx, svvy = Svv_valid.nonzero()    
                 svv_data = np.array(Svv[Svv_valid])[0]
                 norm_vv = csr_matrix((svv_data, (svvx, svvy)), shape=(R.shape[1], R.shape[1]))
+                #norm_vv = norm_user.dot(norm_item)
                 sp.save_npz(self.path + '/s_pre_adj_vv_' + str(self.twohop) + '.npz', norm_vv)
 
                 norm_user = norm_user.tocsr()
