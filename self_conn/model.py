@@ -172,8 +172,10 @@ class LightGCN(BasicModel):
         else:
             g_droped_user, g_droped_item, g_droped_uu, g_droped_vv, g_droped_du, g_droped_dv = self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv, self.Graph_du, self.Graph_dv
         
-        du_org = torch.sparse.mm(g_droped_du, users_org)
-        dv_org = torch.sparse.mm(g_droped_dv, items_org)
+        #du_org = torch.sparse.mm(g_droped_du, users_org)
+        #dv_org = torch.sparse.mm(g_droped_dv, items_org)
+        du_org = g_droped_du * users_org
+        dv_org = g_droped_dv * items_org
         for layer in range(self.n_layers):
             '''if self.A_split:
                 temp_emb_user, temp_emb_item = [], []

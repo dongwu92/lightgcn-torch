@@ -338,15 +338,15 @@ class Loader(BasicDataset):
                 pre_adj_item = sp.load_npz(self.path + '/s_pre_adj_item_' + str(self.twohop) + '.npz')
                 pre_adj_uu = sp.load_npz(self.path + '/s_pre_adj_uu_' + str(self.twohop) + '.npz')
                 pre_adj_vv = sp.load_npz(self.path + '/s_pre_adj_vv_' + str(self.twohop) + '.npz')
-                pre_dmat_u = sp.load_npz(self.path + '/s_pre_adj_duser_' + str(self.twohop) + '.npz')
-                pre_dmat_v = sp.load_npz(self.path + '/s_pre_adj_ditem_' + str(self.twohop) + '.npz')
+                pre_dmat_u = np.load(self.path + '/s_pre_adj_duser_' + str(self.twohop) + '.np')
+                pre_dmat_v = np.load(self.path + '/s_pre_adj_ditem_' + str(self.twohop) + '.np')
                 print("successfully loaded...")
                 norm_user = pre_adj_user
                 norm_item = pre_adj_item
                 norm_uu = pre_adj_uu
                 norm_vv = pre_adj_vv
-                Dmat_user = pre_dmat_u
-                Dmat_item = pre_dmat_v
+                D_u = pre_dmat_u
+                D_v = pre_dmat_v
             except :
                 print("generating adjacency matrix")
                 s = time()
@@ -360,7 +360,8 @@ class Loader(BasicDataset):
                 D_user = np.power(rowsum_user, -0.5).flatten()
                 D_user[np.isinf(D_user)] = 0
                 Dmat_user = sp.diags(D_user)
-                sp.save_npz(self.path + '/s_pre_adj_duser_' + str(self.twohop) + '.npz', Dmat_user)
+                D_u = np.power(rowsum_user + 1, -0.5).flatten()[:, np.newaxis]
+                np.save(self.path + '/s_pre_adj_duser_' + str(self.twohop) + '.np', D_u)
                 print("generating 3")
 
                 adj_item = R.todok()
@@ -369,7 +370,8 @@ class Loader(BasicDataset):
                 D_item = np.power(rowsum_item, -0.5).flatten()
                 D_item[np.isinf(D_item)] = 0
                 Dmat_item = sp.diags(D_item)
-                sp.save_npz(self.path + '/s_pre_adj_ditem_' + str(self.twohop) + '.npz', Dmat_item)
+                D_v = np.power(rowsum_item + 1, -0.5).flatten()[:, np.newaxis]
+                np.save(self.path + '/s_pre_adj_ditem_' + str(self.twohop) + '.np', D_v)
                 print("generating 5")
 
                 norm_user = Dmat_item.dot(adj_user).dot(Dmat_user)
@@ -424,22 +426,20 @@ class Loader(BasicDataset):
                 self.Graph_item = self._split_A_hat(norm_item)
                 self.Graph_uu = self._split_A_hat(norm_uu)
                 self.Graph_vv = self._split_A_hat(norm_vv)
-                self.Graph_du = self._split_A_hat(Dmat_user)
-                self.Graph_dv = self._split_A_hat(Dmat_item)
+                self.Graph_du = self._split_A_hat(D_u)
+                self.Graph_dv = self._split_A_hat(D_v)
                 print("done split matrix")
             else:
                 self.Graph_user = self._convert_sp_mat_to_sp_tensor(norm_user)
                 self.Graph_item = self._convert_sp_mat_to_sp_tensor(norm_item)
                 self.Graph_uu = self._convert_sp_mat_to_sp_tensor(norm_uu)
                 self.Graph_vv = self._convert_sp_mat_to_sp_tensor(norm_vv)
-                self.Graph_du = self._convert_sp_mat_to_sp_tensor(Dmat_user)
-                self.Graph_dv = self._convert_sp_mat_to_sp_tensor(Dmat_item)
+                self.Graph_du = torch.FloatTensor(D_u).to(world.device)
+                self.Graph_dv = torch.FloatTensor(D_v).to(world.device)
                 self.Graph_user = self.Graph_user.coalesce().to(world.device)
                 self.Graph_item = self.Graph_item.coalesce().to(world.device)
                 self.Graph_uu = self.Graph_uu.coalesce().to(world.device)
                 self.Graph_vv = self.Graph_vv.coalesce().to(world.device)
-                self.Graph_du = self.Graph_du.coalesce().to(world.device)
-                self.Graph_dv = self.Graph_dv.coalesce().to(world.device)
                 print("don't split the matrix")
         return self.Graph_user, self.Graph_item, self.Graph_uu, self.Graph_vv, self.Graph_du, self.Graph_dv
 
