@@ -1,0 +1,85 @@
+{'precision': array([0.05571706]), 'recall': array([0.18174135]), 'ndcg': array([0.15470018])}  --bpr_batch=4096
+{'precision': array([0.05529506]), 'recall': array([0.18110965]), 'ndcg': array([0.15425407])}  --bpr_batch=8096
+{'precision': array([0.05517114]), 'recall': array([0.1810738]), 'ndcg': array([0.1538437])}    --bpr_batch=10000
+{'precision': array([0.05560486]), 'recall': array([0.18165243]), 'ndcg': array([0.15473576])}  --bpr_batch=10000 1e-2 cross entropy(on output emb)
+{'precision': array([0.05878492]), 'recall': array([0.19124529]), 'ndcg': array([0.16218571])}  --recdim=250 --bpr_batch=8192
+{'precision': array([0.05847009]), 'recall': array([0.1891943]), 'ndcg': array([0.16081285])}   --recdim=250  with mse constraint
+{'precision': array([0.05562496]), 'recall': array([0.18171782]), 'ndcg': array([0.1547955])}   --bpr_batch=10000 1e-2 cross entropy(on input emb)
+{'precision': array([0.05559984]), 'recall': array([0.18160318]), 'ndcg': array([0.15475907])}  --bpr_batch=10000 1e-2 symmetric corss entropy
+{'precision': array([0.05607542]), 'recall': array([0.18372734]), 'ndcg': array([0.15589104])}  --bpr_batch=10000 --epochs 2000  1e-2 symmetric corss entropy
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=4 --keepprob=0.8 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000  0.004
+{'precision': array([0.05586945]), 'recall': array([0.186025]), 'ndcg': array([0.15406967])}
+
+self conn::: 
+{'precision': array([0.05617088]), 'recall': array([0.18554007]), 'ndcg': array([0.15628382])}  --epochs 1500
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=4 --keepprob=0.8 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000    0.004
+{'precision': array([0.0569797]), 'recall': array([0.18839552]), 'ndcg': array([0.15680017])}
+{'precision': array([0.05684071]), 'recall': array([0.1878848]), 'ndcg': array([0.15656998])}
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=4 --seed=0 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.004
+{'precision': array([0.05702827]), 'recall': array([0.18830232]), 'ndcg': array([0.15664417])}
+{'precision': array([0.05704501]), 'recall': array([0.18825861]), 'ndcg': array([0.15672287])}
+
+-----------------------------???
+du_org = torch.sparse.mm(g_droped_du, users_org)
+dv_org = torch.sparse.mm(g_droped_dv, items_org)
+users_emb = users_emb + du_org
+items_emb = items_emb + dv_org
+uv_emb = torch.sparse.mm(g_droped_item, items_emb)
+uu_emb = torch.sparse.mm(g_droped_uu, users_emb)
+users_emb = uu_emb + uv_emb
+vu_emb = torch.sparse.mm(g_droped_user, users_emb)
+vv_emb = torch.sparse.mm(g_droped_vv, items_emb)
+items_emb = vv_emb + vu_emb
+{'precision': array([0.05727443]), 'recall': array([0.188285]), 'ndcg': array([0.15521543])}
+{'precision': array([0.05735984]), 'recall': array([0.18896988]), 'ndcg': array([0.15524406])}
+-----------------------------
+
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=3 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.004
+{'precision': array([0.0573883]), 'recall': array([0.18725424]), 'ndcg': array([0.15860842])}
+
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=5 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.004
+{'precision': array([0.05761103]), 'recall': array([0.18932647]), 'ndcg': array([0.15603035])}
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=3 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.002
+{'precision': array([0.05763447]), 'recall': array([0.18808452]), 'ndcg': array([0.15883139])}
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=3 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.001
+{'precision': array([0.05749213]), 'recall': array([0.18742605]), 'ndcg': array([0.15854312])}
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=3 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0
+{'precision': array([0.05767299]), 'recall': array([0.18771516]), 'ndcg': array([0.15829268])}
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=6 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.002
+{'precision': array([0.05592471]), 'recall': array([0.18384526]), 'ndcg': array([0.14958929])}
+
+{'precision': array([0.05643379]), 'recall': array([0.18635362]), 'ndcg': array([0.15328249])}
+python main.py --decay=1e-4 --lr=0.0015 --layer=6 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.008
+
+main.py --decay=1e-4 --lr=0.0015 --layer=6 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.008
+{'precision': array([0.05643881]), 'recall': array([0.18645018]), 'ndcg': array([0.1532149])}
+
+python main.py --decay=1e-4 --lr=0.0015 --layer=4 --seed=2020 --dataset="gowalla" --topks="[20]" --bpr_batch=10000 --epochs=2000 --twohop=0.06
+{'precision': array([0.05644383]), 'recall': array([0.18500568]), 'ndcg': array([0.15504856])}
+
+
+bipartite_loss = torch.mean(torch.square(userEmb0 - posEmb0)) + torch.mean(torch.square(userEmb0 - negEmb0))
+        ue = F.softmax(userEmb0, dim=-1)
+        pve = F.softmax(posEmb0, dim=-1)
+        nve = F.softmax(negEmb0, dim=-1)
+        bipartite_loss = torch.mean(ue * torch.log(pve)) + torch.mean(ue * torch.log(nve)) + torch.mean(pve * torch.log(ue)) + torch.mean(nve * torch.log(ue))
+        loss += 1e-2 * bipartite_loss
+{'precision': array([0.05747706]), 'recall': array([0.18877901]), 'ndcg': array([0.15589014])}
+
+--------------------
+num_topics=128
+users_topic_weights = torch.nn.functional.softmax(torch.mm(org_users_emb, self.user_topics.t()), dim=-1)
+items_topic_weights = torch.nn.functional.softmax(torch.mm(org_items_emb, self.item_topics.t()), dim=-1)
+users_emb = users_org = torch.cat([self.embedding_user.weight, torch.mm(users_topic_weights, self.user_topics)], dim=-1)
+items_emb = items_org = torch.cat([self.embedding_item.weight, torch.mm(items_topic_weights, self.item_topics)], dim=-1)
+{'precision': array([0.05804809]), 'recall': array([0.19022969]), 'ndcg': array([0.15847753])}
+--------------------

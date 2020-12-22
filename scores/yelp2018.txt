@@ -1,0 +1,1 @@
+{'precision': array([0.02798408]), 'recall': array([0.06192894]), 'ndcg': array([0.05070925])}  --bpr_batch=10000

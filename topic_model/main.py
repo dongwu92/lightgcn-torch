@@ -16,10 +16,9 @@ import register
 from register import dataset
 from cudaloader import CudaLoader
 import logging
-import os
 
 logging.basicConfig(level=logging.ERROR,#控制台打印的日志级别
-                    filename='../logs/' + os.getcwd().split('/')[-1] + world.model_name + '@' + time.strftime('%Y_%m_%d_%H_%M_%S') + '.log',
+                    filename='../logs/' + world.model_name + '@' + time.strftime('%Y_%m_%d_%H_%M_%S') + '.log',
                     filemode='a',##模式，有w和a，w就是写模式，每次都会重新写日志，覆盖之前的日志
                     format='%(asctime)s: %(message)s'
                 )
